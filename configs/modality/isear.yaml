@@ -1,0 +1,4 @@
+# ISEAR 전용 모델 설정
+model:
+  audio: null
+  transcription: null

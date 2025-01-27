@@ -1,0 +1,6 @@
+# 기본 모델 설정
+model:
+  text:
+    name: "bert-base-uncased"
+    max_length: 512
+  fusion: "early" 

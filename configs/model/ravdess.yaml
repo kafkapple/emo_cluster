@@ -1,0 +1,23 @@
+# RAVDESS 모델 설정
+defaults:
+  - base
+  - _self_
+
+model:
+  audio:
+    name: "facebook/wav2vec2-base"
+    sample_rate: 16000
+  transcription:
+    enabled: true
+    model_size: "tiny"
+    device: "auto"
+    model_dir: "models/whisper"
+    batch_size: 1
+    options:
+      language: "en"
+      task: "transcribe"
+      beam_size: 1
+      best_of: 1
+      fp16: false
+      condition_on_previous_text: false
+      temperature: 0.0 

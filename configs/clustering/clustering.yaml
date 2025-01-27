@@ -1,0 +1,63 @@
+# 클러스터링 기본 설정
+method: "kmeans"  # kmeans, dbscan, hierarchical, gmm
+n_clusters: 8  # 기본 클러스터 수
+
+# 퓨전 설정
+fusion:
+  enabled: true
+  method: "early"  # early 또는 weighted
+  alpha: 0.5  # weighted 퓨전에서 사용되는 가중치
+
+# 클러스터 최적화 설정
+optimization:
+  enabled: true
+  metrics:
+    - silhouette    # 클러스터 응집도와 분리도
+    - calinski_harabasz  # 클러스터 간 분산 대비 클러스터 내 분산
+    - davies_bouldin     # 클러스터 간 유사도
+  n_clusters_range:
+    min: 5
+    max: 9
+
+# 클래스 기반 탐색 설정
+class_based:
+  enabled: true
+  multipliers: [0.5, 0.75, 1.0, 1.25, 1.5]  # 클래스 수 대비 배수
+
+# 시각화 설정 (공통)
+visualization:
+  figsize: [12, 8]
+  dpi: 300
+  cmap: "tab20"
+  style: "seaborn"
+  save_plots: true
+  plot_dir: "${hydra:runtime.output_dir}/plots"
+  show_grid: true
+  line_width: 2
+  marker_size: 8
+
+# 평가 설정
+evaluation:
+  metrics:
+    - ari
+    - nmi
+    - silhouette
+  save_results: true
+  results_dir: "${hydra:runtime.output_dir}/results"
+
+# 클러스터링 방법별 설정
+methods:
+  kmeans:
+    random_state: 42
+    init: "k-means++"
+    tol: 1e-4
+  gmm:
+    covariance_type: "full"
+    random_state: 42
+    n_init: 1
+  hierarchical:
+    affinity: "euclidean"
+    linkage: "ward"
+  dbscan:
+    eps: 0.5
+    min_samples: 5

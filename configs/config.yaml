@@ -1,0 +1,70 @@
+defaults:
+  - dataset: isear
+  - model: model
+  - clustering: clustering
+  - analysis: latent_analysis
+  - _self_
+
+general:
+  timestamp: ${now:%Y%m%d_%H%M%S}
+  output_dir: outputs/${general.timestamp}
+  results_dir: ${general.output_dir}/results
+
+# 로깅 설정
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  handlers:
+    file:
+      enabled: true
+      filename: ${general.output_dir}/run.log
+      mode: "a"
+    console:
+      enabled: true
+      level: INFO
+
+# 실험 설정
+experiment:
+  name: "emotion_clustering"
+  seed: 42
+  debug: false
+  save_results: true
+  results_dir: "results"
+
+# 하드웨어 설정
+hardware:
+  use_cuda: true
+  num_workers: 4
+  pin_memory: true
+
+# 전역 캐시 설정 (다른 캐시 설정의 기본값)
+cache:
+  enabled: true
+  root_dir: "cache"
+  version: "v1"
+  cleanup:
+    enabled: true
+    max_age_days: 7
+
+analysis:
+  vae:
+    latent_dim: 2  # VAE 잠재 공간 차원
+    hidden_dims: [128, 64, 32]  # 인코더/디코더 히든 레이어 차원
+    learning_rate: 0.001
+    batch_size: 32
+    epochs: 50
+    beta: 1.0  # KL 발산 가중치
+    device: "cuda"  # 또는 "cpu"
+  
+  tsne:
+    perplexity: 30
+    n_iter: 1000
+    learning_rate: 200
+  
+  umap:
+    n_neighbors: 15
+    min_dist: 0.1
+    n_components: 2
+    metric: "euclidean"
+
+

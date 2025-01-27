@@ -1,0 +1,54 @@
+# ISEAR 데이터셋 설정
+name: "isear"
+modalities: ["text"]  # 텍스트만 사용
+primary_modality: "text"
+
+# 데이터 경로
+data_path: "./data/isear/ISEAR.csv"
+labels_path: "./data/isear/labels.json"
+download_url: "https://raw.githubusercontent.com/sinmaniphel/py_isear_dataset/master/isear.csv"
+download_path: "./data/isear"
+
+
+language:
+  enabled: true
+  target: "en"
+columns:
+  text: "SIT"
+  emotion: "EMOT"
+  intensity: "INTS"
+  gender: "SEX"
+  age: "AGE"
+  country: "COUN"
+
+# 감정 클래스 정보
+emotions:
+  n_classes: 7  # 감정 클래스 수
+  n_classes_min: 5  # 최소 클러스터 수 (n_classes - 2)
+  n_classes_max: 9  # 최대 클러스터 수 (n_classes + 2)
+  classes:
+    joy: 0
+    fear: 1
+    anger: 2
+    sadness: 3
+    disgust: 4
+    shame: 5
+    guilt: 6
+
+# 전처리 설정
+preprocess:
+  text:
+    max_length: 512
+    lowercase: true
+    remove_punctuation: true
+    remove_numbers: false
+
+# 캐시 설정
+cache:
+  embeddings:
+    enabled: true
+    directory: "embeddings"
+    compression: true
+    metadata:
+      save_config: true
+      save_timestamp: true 

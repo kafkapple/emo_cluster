@@ -1,0 +1,46 @@
+# 공통 데이터셋 구조
+csv_structure:
+  columns:
+    id: "id"  # 파일 ID 또는 텍스트 ID
+    text: "text"  # 텍스트 내용
+    emotion: "emotion"  # 감정 레이블
+    intensity: "intensity"  # 감정 강도
+    gender: "gender"  # 성별
+    age: "age"  # 나이
+    source: "source"  # 데이터 출처 (audio/text)
+
+# 공통 데이터셋 설정
+defaults:
+  - _self_
+
+# 기본 모달리티 설정
+modalities: []
+primary_modality: null
+
+# 감정 클래스 기본 설정
+emotions:
+  n_classes: null
+  n_classes_min: ${eval:${.n_classes} - 2}
+  n_classes_max: ${eval:${.n_classes} + 2}
+  classes: {}
+
+# 전처리 기본 설정
+preprocess:
+  text:
+    max_length: 512
+    lowercase: true
+    remove_punctuation: true
+    remove_numbers: false
+  audio:
+    sample_rate: 16000
+    normalize: true
+
+# 캐시 기본 설정
+cache:
+  embeddings:
+    enabled: true
+    directory: "embeddings"
+    compression: true
+    metadata:
+      save_config: true
+      save_timestamp: true 

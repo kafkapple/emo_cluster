@@ -1,0 +1,8 @@
+# ISEAR 모델 설정
+defaults:
+  - base
+  - _self_
+
+model:
+  audio: null
+  transcription: null 

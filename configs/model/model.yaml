@@ -1,0 +1,22 @@
+
+text:
+  name: "bert-base-uncased"
+  max_length: 512
+audio:
+  name: "facebook/wav2vec2-base"
+  sample_rate: 16000
+fusion: "early"  # early 또는 weighted
+transcription:
+  enabled: ${oc.env:ENABLE_TRANSCRIPTION,true}
+  model_size: "tiny"
+  device: ${oc.env:WHISPER_DEVICE,auto}
+  model_dir: ${oc.env:WHISPER_MODEL_DIR,models/whisper}
+  batch_size: 1
+  options:
+    language: ${oc.env:WHISPER_LANGUAGE,en}
+    task: ${oc.env:WHISPER_TASK,transcribe}
+    beam_size: ${oc.env:WHISPER_BEAM_SIZE,1}
+    best_of: ${oc.env:WHISPER_BEST_OF,1}
+    fp16: ${oc.env:WHISPER_FP16,false}
+    condition_on_previous_text: false
+    temperature: 0.0

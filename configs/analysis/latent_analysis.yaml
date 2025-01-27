@@ -1,0 +1,45 @@
+# 잠재 공간 분석 설정
+n_components: 2
+random_state: 42
+
+# PCA 설정
+pca:
+  n_components: 2
+  whiten: false
+
+# t-SNE 설정
+tsne:
+  n_components: 2
+  perplexity: 30
+  n_iter: 1000
+  learning_rate: 200
+
+# UMAP 설정
+umap:
+  n_components: 2
+  n_neighbors: 15
+  min_dist: 0.1
+  metric: "euclidean"
+
+# VAE 설정
+vae:
+  latent_dim: 2
+  hidden_dims: [128, 64, 32]
+  learning_rate: 0.001
+  batch_size: 32
+  n_epochs: 100
+  beta: 1.0
+  device: "cuda"
+
+# 시각화 설정
+visualization:
+  figsize: [15, 15]
+  cmap: "viridis"
+  dpi: 300
+  save_format: "png"
+
+# 저장 설정
+save:
+  embeddings: true
+  metrics: true
+  plots: true 

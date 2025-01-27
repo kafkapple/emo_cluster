@@ -1,0 +1,53 @@
+# RAVDESS 데이터셋 설정
+name: "ravdess"
+modalities: ["audio", "text"]  # 음성과 전사 텍스트
+primary_modality: "audio"
+
+# 데이터 경로
+data_path: "./data/ravdess/audio_speech_actors_01-24"
+labels_path: "./data/ravdess/labels.json"
+download_url: "https://zenodo.org/record/1188976/files/Audio_Speech_Actors_01-24.zip"
+download_path: "./data/ravdess"
+
+# 감정 클래스 정보
+emotions:
+  n_classes: 8  # 감정 클래스 수
+  n_classes_min: 6  # 최소 클러스터 수 (n_classes - 2)
+  n_classes_max: 10  # 최대 클러스터 수 (n_classes + 2)
+  classes:
+    neutral: 0
+    calm: 1
+    happy: 2
+    sad: 3
+    angry: 4
+    fearful: 5
+    disgust: 6
+    surprised: 7
+
+# 데이터셋 특성
+columns:
+  audio: "file_path"
+  emotion: "emotion"
+  intensity: "intensity"
+  gender: "gender"
+  actor_id: "actor_id"
+
+# 전처리 설정
+preprocess:
+  audio:
+    sample_rate: 16000
+    normalize: true
+  text:
+    max_length: 512
+    lowercase: true
+    remove_punctuation: true
+
+# 캐시 설정
+cache:
+  embeddings:
+    enabled: true
+    directory: "embeddings"
+    compression: true
+    metadata:
+      save_config: true
+      save_timestamp: true
