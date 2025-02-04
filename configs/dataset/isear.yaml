@@ -9,17 +9,12 @@ labels_path: "./data/isear/labels.json"
 download_url: "https://raw.githubusercontent.com/sinmaniphel/py_isear_dataset/master/isear.csv"
 download_path: "./data/isear"
 
-
-language:
-  enabled: true
-  target: "en"
+# 컬럼 설정
 columns:
   text: "SIT"
-  emotion: "EMOT"
-  intensity: "INTS"
-  gender: "SEX"
-  age: "AGE"
-  country: "COUN"
+  emotion: "Field1"
+  emotion_id: "EMOT"
+  language: "language"
 
 # 감정 클래스 정보
 emotions:
@@ -27,13 +22,13 @@ emotions:
   n_classes_min: 5  # 최소 클러스터 수 (n_classes - 2)
   n_classes_max: 9  # 최대 클러스터 수 (n_classes + 2)
   classes:
-    joy: 0
-    fear: 1
-    anger: 2
-    sadness: 3
-    disgust: 4
-    shame: 5
-    guilt: 6
+    joy: 1
+    fear: 2
+    anger: 3
+    sadness: 4
+    disgust: 5
+    shame: 6
+    guilt: 7
 
 # 전처리 설정
 preprocess:

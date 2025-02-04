@@ -195,18 +195,51 @@ class AudioPreprocessor:
             # 모델 입력 형식으로 변환
             with torch.no_grad(), torch.cuda.amp.autocast():
                 inputs = waveform.to(self.device)
+                if self.verbose:
+                    logger.debug(f"Input shape: {inputs.shape}")
+                
                 outputs = self.model(inputs)
                 
-                # 시퀀스 차원 평균화 (3D -> 2D)
-                if len(outputs.shape) == 3:  # [batch, sequence, features]
-                    embeddings = outputs.mean(dim=1)  # [batch, features]
+                # Wav2Vec2 모델 출력 처리
+                if hasattr(outputs, 'last_hidden_state'):
+                    # 시퀀스 차원에 대해 평균을 계산하여 고정된 크기의 임베딩 생성
+                    embeddings = outputs.last_hidden_state
+                    if self.verbose:
+                        logger.debug(f"Last hidden state shape: {embeddings.shape}")
+                    
+                    # 시퀀스 차원에 대해 평균 계산
+                    embeddings = embeddings.mean(dim=1)  # [batch, sequence, features] -> [batch, features]
                 else:
                     embeddings = outputs
+                    if self.verbose:
+                        logger.debug(f"Output shape before processing: {embeddings.shape}")
                 
-                return embeddings.cpu().squeeze(0)  # [features]
+                # 차원 정규화
+                embeddings = embeddings.squeeze()  # 모든 싱글톤 차원 제거
+                if self.verbose:
+                    logger.debug(f"Shape after squeeze: {embeddings.shape}")
+                
+                # 항상 2D 텐서로 변환
+                if embeddings.dim() == 1:
+                    embeddings = embeddings.unsqueeze(0)  # [features] -> [1, features]
+                elif embeddings.dim() > 2:
+                    # 마지막 차원을 제외한 모든 차원에 대해 평균
+                    dims_to_reduce = tuple(range(0, embeddings.dim() - 1))
+                    embeddings = embeddings.mean(dim=dims_to_reduce).unsqueeze(0)
+                
+                if self.verbose:
+                    logger.debug(f"Final embedding shape: {embeddings.shape}")
+                
+                # 최종 shape 검증
+                if embeddings.dim() != 2:
+                    raise ValueError(f"Expected 2D tensor, got shape: {embeddings.shape}")
+                
+                return embeddings.cpu()
                 
         except Exception as e:
             logger.error(f"Error preprocessing audio {audio_path}: {str(e)}")
+            if self.verbose:
+                logger.exception("Detailed error:")
             return None
 
     def transcribe(
@@ -546,7 +579,7 @@ def load_ravdess_dataset(config: DictConfig) -> Tuple[List[str], List[str]]:
     """RAVDESS 데이터셋을 로드합니다."""
     try:
         # 메타데이터 로드
-        metadata_path = Path(config.dataset.download_path) / "metadata.json"
+        metadata_path = Path(config.dataset.data_path) / "metadata.json"
         if not metadata_path.exists():
             raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
             
@@ -558,29 +591,31 @@ def load_ravdess_dataset(config: DictConfig) -> Tuple[List[str], List[str]]:
         transcriptions = []
         
         # 디버그 로깅 추가
-        audio_base_path = Path(config.dataset.download_path) / "audio_speech_actors_01-24"
-        logger.debug(f"Audio base path: {audio_base_path} (exists: {audio_base_path.exists()})")
+        base_path = Path(config.dataset.data_path)
+        logger.debug(f"Audio base path: {base_path} (exists: {base_path.exists()})")
         
-        # 모든 WAV 파일 찾기
-        wav_files = list(audio_base_path.rglob("*.wav"))
+        # 모든 WAV 파일 찾기 (Actor_XX 디렉토리 내부)
+        wav_files = []
+        for actor_dir in base_path.glob("Actor_*"):
+            wav_files.extend(actor_dir.glob("*.wav"))
         logger.debug(f"Found {len(wav_files)} WAV files")
         
         # 메타데이터의 파일 ID와 실제 파일 매핑
         for file_id in sorted(metadata.keys()):
-            audio_file = audio_base_path / file_id
+            audio_file = base_path / file_id
             logger.debug(f"Checking audio file: {audio_file} (exists: {audio_file.exists()})")
             
             if audio_file.exists():
                 audio_paths.append(str(audio_file))
                 
                 # 전사 텍스트 파일 경로
-                trans_file = audio_base_path / "transcriptions" / f"{file_id}.txt"
+                trans_file = base_path / "transcriptions" / f"{file_id}.txt"
                 if trans_file.exists():
                     with open(trans_file, 'r') as f:
                         transcriptions.append(f.read().strip())
                 else:
                     transcriptions.append("")
-                    
+        
         logger.info(f"Loaded {len(audio_paths)} audio files from RAVDESS")
         if transcriptions:
             logger.info(f"Found {len([t for t in transcriptions if t])} transcriptions")

@@ -64,11 +64,11 @@ class EmbeddingCache:
         """설정의 해시값을 계산합니다."""
         relevant_config = {
             "audio": {
-                "model": self.config.model.audio_model,
-                "sample_rate": self.config.dataset.preprocess.audio_sample_rate
+                "model": self.config.model.audio.name,
+                "sample_rate": self.config.model.audio.sample_rate
             },
             "text": {
-                "model": self.config.model.text_model
+                "model": self.config.model.text.name
             }
         }
         return str(hash(str(relevant_config[modality])))

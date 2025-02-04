@@ -4,7 +4,7 @@ modalities: ["audio", "text"]  # 음성과 전사 텍스트
 primary_modality: "audio"
 
 # 데이터 경로
-data_path: "./data/ravdess/audio_speech_actors_01-24"
+data_path: "./data/ravdess"  # Actor_01, Actor_02 등의 디렉토리가 있는 루트 경로
 labels_path: "./data/ravdess/labels.json"
 download_url: "https://zenodo.org/record/1188976/files/Audio_Speech_Actors_01-24.zip"
 download_path: "./data/ravdess"

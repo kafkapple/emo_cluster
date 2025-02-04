@@ -328,50 +328,61 @@ class RAVDESSMetadataManager(DatasetMetadataManager):
     def create_metadata(self) -> None:
         """메타데이터를 생성합니다."""
         try:
-            audio_path = Path(self.config.dataset.download_path) / "audio_speech_actors_01-24"
+            base_path = Path(self.config.dataset.data_path)
             metadata = {}
             labels = {}
+            file_index = 0  # 파일 인덱스 추가
             
-            # WAV 파일 처리
-            for wav_file in audio_path.rglob("*.wav"):
+            # Actor_XX 디렉토리 검색
+            for actor_dir in sorted(base_path.glob("Actor_*")):  # 정렬된 순서로 처리
                 try:
-                    # 파일명에서 정보 추출
-                    filename = wav_file.name
-                    parts = filename.split("-")
-                    
-                    # 상대 경로로 저장
-                    rel_path = str(wav_file.relative_to(audio_path))
-                    file_id = rel_path.replace("\\", "/")  # Windows 경로 처리
-                    
-                    # 감정 코드 추출 및 매핑
-                    emotion_code = parts[2]
-                    emotion = self.EMOTION_MAP.get(emotion_code, "unknown")
-                    
-                    # 메타데이터 생성
-                    metadata[file_id] = {
-                        "emotion": emotion,
-                        "intensity": "normal" if parts[3] == "01" else "strong",
-                        "gender": "female" if int(parts[6].split(".")[0]) % 2 == 0 else "male",
-                        "actor_id": int(parts[6].split(".")[0])
-                    }
-                    
-                    # 레이블 저장
-                    labels[file_id] = emotion
-                    
+                    # WAV 파일 처리
+                    for wav_file in sorted(actor_dir.glob("*.wav")):  # 정렬된 순서로 처리
+                        try:
+                            # 파일명에서 정보 추출
+                            filename = wav_file.name
+                            parts = filename.split("-")
+                            
+                            # 상대 경로로 저장 (Actor_XX/filename.wav 형식)
+                            rel_path = str(wav_file.relative_to(base_path))
+                            file_id = rel_path.replace("\\", "/")  # Windows 경로 처리
+                            
+                            # 감정 코드 추출 및 매핑
+                            emotion_code = parts[2]
+                            emotion = self.EMOTION_MAP.get(emotion_code, "unknown")
+                            
+                            # 메타데이터 생성
+                            metadata[file_id] = {
+                                "emotion": emotion,
+                                "intensity": "normal" if parts[3] == "01" else "strong",
+                                "gender": "female" if int(parts[6].split(".")[0]) % 2 == 0 else "male",
+                                "actor_id": int(parts[6].split(".")[0])
+                            }
+                            
+                            # 레이블 저장 (인덱스 기반)
+                            labels[str(file_index)] = emotion
+                            file_index += 1
+                            
+                        except Exception as e:
+                            logger.warning(f"Error processing file {filename}: {e}")
+                            continue
+                            
                 except Exception as e:
-                    logger.warning(f"Error processing file {filename}: {e}")
+                    logger.warning(f"Error processing directory {actor_dir}: {e}")
                     continue
             
             # 메타데이터 저장
-            metadata_path = Path(self.config.dataset.download_path) / "metadata.json"
+            metadata_path = os.path.join(self.dataset_path, "metadata.json")
             with open(metadata_path, "w") as f:
                 json.dump(metadata, f, indent=4)
-            logger.info(f"Metadata saved to: {metadata_path}")
             
-            # 레이블 저장
-            labels_path = Path(self.config.dataset.download_path) / "labels.json"
+            # 레이블 저장 (새로운 형식)
+            labels_path = os.path.join(self.dataset_path, "labels.json")
             with open(labels_path, "w") as f:
-                json.dump(labels, f, indent=4)
+                json.dump({"labels": labels}, f, indent=4)  # labels 필드 추가
+            
+            logger.info(f"Created metadata for {len(metadata)} files")
+            logger.info(f"Metadata saved to: {metadata_path}")
             logger.info(f"Labels saved to: {labels_path}")
             
         except Exception as e:

@@ -245,15 +245,18 @@ class DatasetDownloader:
                 '7': 'guilt'
             }
             
-            # 레이블 생성
-            labels = {}
-            for idx, row in df.iterrows():
-                try:
-                    emotion_code = str(row['EMOT']).strip()
-                    if emotion_code in emotion_map:
-                        labels[str(idx)] = emotion_map[emotion_code]
-                except Exception as e:
-                    logger.warning(f"Error processing row {idx}: {e}")
+            # 레이블 정보 생성
+            labels = {
+                'num_samples': len(df),
+                'num_classes': len(emotion_map),
+                'class_distribution': df['EMOT'].astype(str).map(emotion_map).value_counts().to_dict(),
+                'class_mapping': emotion_map,
+                'labels': {
+                    str(idx): emotion_map[str(row['EMOT']).strip()]
+                    for idx, row in df.iterrows()
+                    if str(row['EMOT']).strip() in emotion_map
+                }
+            }
             
             # 레이블 저장
             labels_path = os.path.join(download_path, 'labels.json')
@@ -261,7 +264,7 @@ class DatasetDownloader:
                 json.dump(labels, f, indent=4)
             
             logger.info(f"Labels saved to: {labels_path}")
-            logger.info(f"Created labels for {len(labels)} samples")
+            logger.info(f"Created labels for {len(labels['labels'])} samples")
             
         except Exception as e:
             logger.error(f"Error creating ISEAR labels: {e}")

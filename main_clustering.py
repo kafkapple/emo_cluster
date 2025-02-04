@@ -31,6 +31,8 @@ from src.data.preprocess import (
     process_text_embeddings
 )
 from src.data.metadata import DatasetMetadataManager
+from src.data.isear_dataset import ISEARDataset
+from src.data.dataset_analyzer import DatasetAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +137,7 @@ def process_audio_embeddings(
                     file_id,
                     emb_np,
                     modality="audio",
-                    model_name=cfg.model.audio.name
+                    model_name=cfg.model.audio.name  # 모델 이름 직접 전달
                 )
                 
         except Exception as e:
@@ -210,7 +212,10 @@ def process_embeddings(
         # 오디오 임베딩 처리
         audio_embeddings = []
         if "audio" in available_modalities and audio_preprocessor:
-            for audio_path in tqdm(audio_paths, desc="Processing audio"):
+            for audio_path in tqdm(
+                audio_paths, 
+                desc="Processing audio"
+            ):
                 # 캐시 확인
                 file_id = str(Path(audio_path).relative_to(cfg.dataset.data_path))
                 cached_emb = cache.load_embedding(file_id, modality="audio")
@@ -230,11 +235,17 @@ def process_embeddings(
                             model_name=cfg.model.audio.name
                         )
             
-            audio_embeddings = np.stack(audio_embeddings) if audio_embeddings else np.array([])
+            audio_embeddings = (
+                np.stack(audio_embeddings) 
+                if audio_embeddings 
+                else np.array([])
+            )
         
         # 텍스트 임베딩 처리
         text_embeddings = []
-        if "text" in available_modalities and text_preprocessor and transcriptions:
+        if ("text" in available_modalities and 
+            text_preprocessor and 
+            transcriptions):
             text_embeddings = process_text_embeddings(
                 cfg, text_preprocessor, transcriptions, cache
             )
@@ -433,19 +444,33 @@ def process_missing_files(
             
             # 텍스트 임베딩 처리
             if file_id in missing_text:
-                transcription = audio_preprocessor.transcribe(
-                    full_audio_path,
-                    transcriptions_dir
-                )
-                if transcription:
-                    logger.debug(f"Transcription for {file_id}: {transcription}")
-                    text_emb = text_preprocessor.preprocess(transcription)
-                    if text_emb is not None:
-                        new_text_embeddings.append(text_emb.numpy())
-                        new_text_files.append(file_id)
-                        success = True
-                else:
-                    logger.warning(f"Transcription failed for {file_id}")
+                # Whisper 모델 사용 가능 여부 확인
+                if (audio_preprocessor.whisper_model is None or 
+                    not audio_preprocessor.transcription_config or 
+                    not audio_preprocessor.transcription_config.enabled):
+                    logger.warning("Whisper transcription is not available or disabled")
+                    continue
+                    
+                # 트랜스크립션 시도
+                try:
+                    transcription = audio_preprocessor.transcribe(
+                        full_audio_path,
+                        transcriptions_dir
+                    )
+                    if transcription:
+                        logger.debug(
+                            f"Transcription for {file_id}: {transcription[:50]}..."
+                        )
+                        text_emb = text_preprocessor.preprocess(transcription)
+                        if text_emb is not None:
+                            new_text_embeddings.append(text_emb.numpy())
+                            new_text_files.append(file_id)
+                            success = True
+                    else:
+                        logger.warning(f"Transcription failed for {file_id}")
+                except Exception as e:
+                    logger.error(f"Transcription error for {file_id}: {str(e)}")
+                    continue
             
             if success:
                 processed_files.append(file_id)
@@ -497,8 +522,10 @@ def check_dataset_exists(download_path: str) -> bool:
     labels_path = download_path / "labels.json"
     
     # 디렉토리 구조 로깅
-    logger.debug(f"Checking paths:")
-    logger.debug(f"- Download path: {download_path} (exists: {download_path.exists()})")
+    logger.debug("Checking paths:")
+    logger.debug(
+        f"Download path: {download_path} (exists: {download_path.exists()})"
+    )
     
     # Actor 폴더들이 존재하는지 직접 확인
     actor_dirs = list(download_path.glob("Actor_*"))
@@ -510,7 +537,9 @@ def check_dataset_exists(download_path: str) -> bool:
         file_count = len(wav_files)
         
         if file_count > 0:
-            logger.info(f"Found existing dataset with {file_count} WAV files in {len(actor_dirs)} actor directories")
+            logger.info(
+                f"Found {file_count} WAV files in {len(actor_dirs)} actor dirs"
+            )
             
             # 메타데이터 매니저 초기화
             metadata_manager = DatasetMetadataManager(str(download_path))
@@ -525,14 +554,17 @@ def check_dataset_exists(download_path: str) -> bool:
             # 레이블 파일 확인 및 생성
             if not labels_path.exists():
                 logger.info("Creating labels file...")
-                DatasetDownloader._create_ravdess_labels(str(download_path), metadata_manager)
+                DatasetDownloader._create_ravdess_labels(
+                    str(download_path), 
+                    metadata_manager
+                )
             else:
                 logger.info("Using existing labels")
                 
             return True
             
         else:
-            logger.warning(f"Actor directories exist but contain no WAV files")
+            logger.warning("Actor directories exist but contain no WAV files")
     else:
         logger.debug("No Actor directories found")
             
@@ -578,11 +610,11 @@ def main(cfg: DictConfig) -> None:
         
         # 데이터셋 모달리티 설정
         primary_modality = cfg.dataset.primary_modality
-        available_modalities = cfg.dataset.modalities
+        modalities = cfg.dataset.modalities
         
         # 데이터셋 다운로드
         downloader = DatasetDownloader(cfg)
-        if not downloader.check_dataset_exists():  # 데이터셋 존재 여부 체크 추가
+        if not downloader.check_dataset_exists():
             logger.info("Downloading dataset...")
             if cfg.dataset.name == "ravdess":
                 downloader.download_ravdess()
@@ -590,13 +622,130 @@ def main(cfg: DictConfig) -> None:
                 downloader.download_isear()
         else:
             logger.info("Dataset already exists, skipping download")
+            
+        # 데이터셋 분석기 초기화
+        analyzer = DatasetAnalyzer(cfg)
+        
+        # ISEAR 데이터셋 분석
+        if cfg.dataset.name == "isear":
+            try:
+                dataset = ISEARDataset(cfg)
+                
+                # 레이블 파일이 없으면 생성
+                if not Path(cfg.dataset.labels_path).exists():
+                    logger.info("Creating labels file...")
+                    dataset.create_labels()
+                
+                df = dataset.load_data()
+                
+                # 데이터셋 분석
+                stats = analyzer.analyze_isear(df)
+                
+                # 전처리 권장사항 확인
+                recommendations = analyzer.get_preprocessing_recommendations()
+                logger.info("\nPreprocessing Recommendations:")
+                for category, items in recommendations.get("isear", {}).items():
+                    if isinstance(items, (list, tuple)) and items:
+                        logger.info(f"\n{category.replace('_', ' ').title()}:")
+                        for item in items:
+                            logger.info(f"  - {item}")
+                    elif isinstance(items, dict) and items:
+                        logger.info(f"\n{category.replace('_', ' ').title()}:")
+                        for key, value in items.items():
+                            logger.info(f"  - {key}: {value}")
+                
+                # 문제가 있는 샘플 처리
+                if stats["potential_issues"]["invalid_emotions"]:
+                    invalid_indices = stats["potential_issues"]["invalid_emotions"]
+                    n_invalid = len(invalid_indices)
+                    logger.warning(f"Found {n_invalid} invalid emotion labels")
+                    df = df.drop(invalid_indices)
+                
+                if stats["potential_issues"]["very_short_texts"]:
+                    short_indices = stats["potential_issues"]["very_short_texts"]
+                    n_short = len(short_indices)
+                    logger.warning(f"Found {n_short} very short texts")
+                    df = df.drop(short_indices)
+                
+                # 통계 저장 (데이터셋별로 구분)
+                stats_path = Path(cfg.general.output_dir) / f"{cfg.dataset.name}_stats.json"
+                with open(stats_path, "w") as f:
+                    # DictConfig를 일반 dict로 변환
+                    serializable_stats = json.loads(
+                        json.dumps(
+                            stats,
+                            default=lambda x: (
+                                x.item() if hasattr(x, 'item') else str(x)
+                            )
+                        )
+                    )
+                    json.dump(serializable_stats, f, indent=2)
+                logger.info(f"Saved dataset statistics to {stats_path}")
+                
+            except Exception as e:
+                logger.error(f"Error processing ISEAR dataset: {e}")
+                raise
+            
+        # RAVDESS 데이터셋 분석
+        elif cfg.dataset.name == "ravdess":
+            try:
+                audio_paths, transcriptions = load_dataset(cfg)
+                
+                # 데이터셋 분석
+                stats = analyzer.analyze_ravdess(audio_paths)
+                
+                # 전처리 권장사항 확인
+                recommendations = analyzer.get_preprocessing_recommendations()
+                logger.info("\nPreprocessing Recommendations:")
+                for category, items in recommendations.get("ravdess", {}).items():
+                    if isinstance(items, (list, tuple)) and items:
+                        logger.info(f"\n{category.replace('_', ' ').title()}:")
+                        for item in items:
+                            logger.info(f"  - {item}")
+                    elif isinstance(items, dict) and items:
+                        logger.info(f"\n{category.replace('_', ' ').title()}:")
+                        for key, value in items.items():
+                            logger.info(f"  - {key}: {value}")
+                
+                # 문제가 있는 파일 제외
+                if stats["potential_issues"]["corrupted_files"]:
+                    corrupted_files = stats["potential_issues"]["corrupted_files"]
+                    n_corrupted = len(corrupted_files)
+                    logger.warning(f"Excluding {n_corrupted} corrupted files")
+                    # audio_paths와 transcriptions 동기화
+                    valid_indices = [
+                        i for i, p in enumerate(audio_paths)
+                        if p not in corrupted_files
+                    ]
+                    audio_paths = [audio_paths[i] for i in valid_indices]
+                    if transcriptions:
+                        transcriptions = [transcriptions[i] for i in valid_indices]
+                
+                # 통계 저장 (데이터셋별로 구분)
+                stats_path = Path(cfg.general.output_dir) / f"{cfg.dataset.name}_stats.json"
+                with open(stats_path, "w") as f:
+                    # DictConfig를 일반 dict로 변환
+                    serializable_stats = json.loads(
+                        json.dumps(
+                            stats,
+                            default=lambda x: (
+                                x.item() if hasattr(x, 'item') else str(x)
+                            )
+                        )
+                    )
+                    json.dump(serializable_stats, f, indent=2)
+                logger.info(f"Saved dataset statistics to {stats_path}")
+                
+            except Exception as e:
+                logger.error(f"Error processing RAVDESS dataset: {e}")
+                raise
         
         # 전처리기 초기화
         audio_preprocessor = None
         text_preprocessor = None
         
         # 오디오 전처리기 초기화
-        if "audio" in cfg.dataset.modalities:
+        if "audio" in modalities:
             # Whisper 설정 생성
             transcription_config = TranscriptionConfig(
                 enabled=cfg.model.transcription.enabled,
@@ -610,7 +759,9 @@ def main(cfg: DictConfig) -> None:
                     'beam_size': cfg.model.transcription.options.beam_size,
                     'best_of': cfg.model.transcription.options.best_of,
                     'fp16': torch.cuda.is_available(),
-                    'condition_on_previous_text': cfg.model.transcription.options.condition_on_previous_text,
+                    'condition_on_previous_text': (
+                        cfg.model.transcription.options.condition_on_previous_text
+                    ),
                     'temperature': cfg.model.transcription.options.temperature
                 }
             )
@@ -623,7 +774,7 @@ def main(cfg: DictConfig) -> None:
             )
         
         # 텍스트 전처리기 초기화
-        if "text" in cfg.dataset.modalities:
+        if "text" in modalities:
             text_preprocessor = TextPreprocessor(
                 model_name=cfg.model.text.name,
                 max_length=cfg.model.text.max_length,
@@ -652,9 +803,13 @@ def main(cfg: DictConfig) -> None:
         ground_truth = []
         try:
             with open(cfg.dataset.labels_path, "r") as f:
-                labels = json.load(f)
+                labels_data = json.load(f)
+                # labels 필드에서 값들만 추출
+                if "labels" not in labels_data:
+                    raise KeyError("Labels field not found in labels file")
+                labels = labels_data["labels"]
                 # 정렬된 순서로 레이블 로드
-                sorted_ids = sorted(labels.keys())
+                sorted_ids = sorted(labels.keys(), key=int)
                 ground_truth = [labels[id_] for id_ in sorted_ids]
             logger.info(f"Loaded {len(ground_truth)} labels")
             logger.info(f"Unique emotions: {set(ground_truth)}")
@@ -687,6 +842,27 @@ def main(cfg: DictConfig) -> None:
             logger.error("No files were processed successfully")
             return
 
+        # 임베딩 데이터 디버그 정보
+        logger.info("\n=== Embeddings Debug Info ===")
+        logger.info(f"Primary embeddings shape: {primary_embeddings.shape}")
+        logger.info(f"Primary embeddings stats:")
+        logger.info(f"- Mean: {primary_embeddings.mean():.4f}")
+        logger.info(f"- Std: {primary_embeddings.std():.4f}")
+        logger.info(f"- Min: {primary_embeddings.min():.4f}")
+        logger.info(f"- Max: {primary_embeddings.max():.4f}")
+        logger.info(f"- NaN values: {np.isnan(primary_embeddings).sum()}")
+        logger.info(f"- Inf values: {np.isinf(primary_embeddings).sum()}")
+
+        # 레이블 데이터 디버그 정보
+        logger.info("\n=== Labels Debug Info ===")
+        unique_labels = set(ground_truth)
+        logger.info(f"Number of unique labels: {len(unique_labels)}")
+        logger.info("Label distribution:")
+        for label in sorted(unique_labels):
+            count = ground_truth.count(label)
+            percentage = (count / len(ground_truth)) * 100
+            logger.info(f"- {label}: {count} samples ({percentage:.2f}%)")
+
         logger.info(f"Number of processed files: {len(primary_embeddings)}")
         logger.info(f"Number of ground truth labels: {len(ground_truth)}")
         
@@ -701,11 +877,30 @@ def main(cfg: DictConfig) -> None:
         logger.info("\n=== Performing Clustering ===")
         # 클러스터링 수행
         logger.info("Processing primary embeddings...")
+        
+        # 클러스터링 디버그 정보
+        logger.info("\n=== Clustering Debug Info ===")
+        logger.info(f"Number of clusters: {cfg.clustering.n_clusters}")
+        logger.info(f"Clustering method: {cfg.clustering.method}")
+        logger.info("Method parameters:")
+        for param, value in cfg.clustering.methods[cfg.clustering.method].items():
+            logger.info(f"- {param}: {value}")
+        
         primary_labels = Clustering.perform_clustering(
             primary_embeddings,
             cfg.clustering.n_clusters
         )
         
+        # 클러스터링 결과 디버그 정보
+        unique_clusters = set(primary_labels)
+        logger.info("\n=== Clustering Results Debug Info ===")
+        logger.info(f"Number of unique clusters: {len(unique_clusters)}")
+        logger.info("Cluster size distribution:")
+        for cluster in sorted(unique_clusters):
+            count = list(primary_labels).count(cluster)
+            percentage = (count / len(primary_labels)) * 100
+            logger.info(f"- Cluster {cluster}: {count} samples ({percentage:.2f}%)")
+
         # 보조 모달리티 클러스터링 (있는 경우)
         secondary_labels = None
         if not np.array_equal(secondary_embeddings, np.zeros_like(primary_embeddings)):
